@@ -1,0 +1,54 @@
+---
+title: "police_data"
+output: html_document
+date: "2024-02-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, echo=FALSE}
+library(tidyverse)
+library(ggplot2)
+```
+The data we are looking at is NYPD Historic Shooting Incident Data, and our main goal is trying to see whether male vs female victims are prevalent, and if certain time during the day is more dangerous vs other days. Data is obtained through the course
+
+
+First load the data
+```{r}
+police_data <- read.csv('NYPD_Shooting_Incident_Data__Historic_.csv',header = TRUE)
+summary(police_data)
+head(police_data)
+```
+
+Cleaning the data so summary makes more sense. First is to combine date and time together and make them in time format. Second is to name male/female into numbers so that male=1 and female = 0.
+
+```{r}
+high_victim_male <- police_data %>% mutate(male = ifelse(VIC_SEX=='M',1,0)) %>% select(OCCUR_TIME,male) %>% mutate(OCCUR_TIME = as.numeric(substr(OCCUR_TIME,start=1,stop=2))) %>%  group_by(OCCUR_TIME) %>% summarise(male = sum(male))
+high_victim_female <- police_data %>% mutate(female=ifelse(VIC_SEX=='F',1,0)) %>% select(OCCUR_TIME,female) %>% mutate(OCCUR_TIME = as.numeric(substr(OCCUR_TIME,start=1,stop=2))) %>%  group_by(OCCUR_TIME) %>% summarise(female=sum(female))
+high_victim <- merge(high_victim_female,high_victim_male,by = 'OCCUR_TIME')
+high_victim
+```
+
+Based on the time, what portion of people are more likely to become victim?
+
+```{r}
+df <- pivot_longer(high_victim, cols=c('female', 'male'), names_to='sex', values_to="case_count")
+ggplot(data=df,aes(fill=sex,x=OCCUR_TIME,y=case_count))+geom_bar(stat = 'identity') + ylab('Total number of incidents')+xlab('Time of day in hours')
+#Also side by side
+ggplot(data=df,aes(fill=sex,x=OCCUR_TIME,y=case_count))+geom_bar(stat = 'identity',position = 'dodge') +xlab('Time of day in hours') + ylab('Total number of incidents')
+```
+
+This is interesting because I would expect females to be more prone to crimes while in reality it seems to be the complete opposite. To confirm this, a linear regression is performed on the dataset
+
+```{r}
+pd2 <- police_data %>% mutate(sex = ifelse(VIC_SEX == 'M',1,0))
+the_model <- glm(sex ~ PRECINCT+JURISDICTION_CODE+X_COORD_CD+ Y_COORD_CD ,data=pd2, family='binomial')
+the_model
+```
+
+As shown by the summary, victim sex is relatively consistent throughout jurisdictions (all variables of influences are relatively low) and intercept played the major role in this case, which indicated that male is more prone to become the victim of crimes ($e^{0.2915}*(1-P)=P,P=0.5724$, which indicated that male is more likely to become the victim) I wonder if this result is different across the regions.
+
+```{r}
+high_victim
+```
